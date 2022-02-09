@@ -14,16 +14,7 @@
  * permissions and limitations under the License.
  */
 
-import { shallow } from 'enzyme';
 import { fromJS } from 'immutable';
-
-// the extra assertion counts in the specifications are due to the `expect` found here
-jest.mock('react', () => {
-  const StrictMode = ({ children }) => children;
-  const react = jest.requireActual('react');
-  expect(react.StrictMode).toBeDefined();
-  return { ...react, StrictMode };
-});
 
 jest.mock('@americanexpress/one-app-router', () => {
   const reactRouter = jest.requireActual('@americanexpress/one-app-router');
@@ -84,20 +75,18 @@ describe('initClient', () => {
     expect.assertions(1);
     const { loadPrerenderScripts } = require('../../src/client/prerender');
     const mockError = new Error('This is a test error!!!');
-    loadPrerenderScripts.mockReturnValue(Promise.reject(mockError));
+    loadPrerenderScripts.mockImplementationOnce(() => { throw mockError; });
 
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const initClient = require('../../src/client/initClient').default;
 
-    try {
-      await initClient();
-    } catch (error) {
-      expect(consoleErrorSpy).toHaveBeenCalledWith(mockError);
-    }
+    await initClient();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(mockError);
   });
 
   it('should redirect if there is a redirectLocation', async () => {
-    expect.assertions(3);
+    expect.assertions(2);
     const promiseResolveSpy = jest.spyOn(Promise, 'resolve');
 
     const { matchPromise } = require('@americanexpress/one-app-router');
@@ -119,33 +108,8 @@ describe('initClient', () => {
     expect(promiseResolveSpy).toHaveBeenCalled();
   });
 
-  it('should return rejected promise if there is an error', async () => {
-    expect.assertions(1);
-    const promiseRejectionSpy = jest.spyOn(Promise, 'reject');
-
-    const { matchPromise } = require('@americanexpress/one-app-router');
-    matchPromise.mockImplementationOnce(
-      (config, cb) => cb('error', { pathname: 'path/to/redirected/location' }, { testProp: 'test' })
-    );
-
-    matchPromise.mockImplementationOnce(
-      () => Promise.reject(new Error('error'))
-    );
-
-    const { loadPrerenderScripts } = require('../../src/client/prerender');
-    loadPrerenderScripts.mockReturnValueOnce(Promise.resolve());
-
-    const initClient = require('../../src/client/initClient').default;
-
-    try {
-      await initClient();
-    } catch (error) {
-      expect(promiseRejectionSpy).toHaveBeenCalled();
-    }
-  });
-
   it('should set up the global redux store and kick off rendering', async () => {
-    expect.assertions(3);
+    expect.assertions(2);
     const promiseResolveSpy = jest.spyOn(Promise, 'resolve');
     const { hydrate } = require('react-dom');
 
@@ -166,35 +130,10 @@ describe('initClient', () => {
     expect(promiseResolveSpy).toHaveBeenCalled();
   });
 
-  it('should use strict mode', async () => {
-    expect.assertions(2);
-    const promiseResolveSpy = jest.spyOn(Promise, 'resolve');
-    const { hydrate } = require('react-dom');
-
-    document.getElementById = jest.fn(() => ({ remove: jest.fn() }));
-
-    const { matchPromise } = require('@americanexpress/one-app-router');
-    matchPromise.mockImplementationOnce(() => Promise.resolve({
-      redirectLocation: null,
-      renderProps: { testProp: 'test' },
-    }));
-
-    const { loadPrerenderScripts } = require('../../src/client/prerender');
-    loadPrerenderScripts.mockReturnValueOnce(Promise.resolve());
-    promiseResolveSpy.mockRestore();
-
-    const initClient = require('../../src/client/initClient').default;
-
-    await initClient();
-
-    const tree = shallow(hydrate.mock.calls[0][0]);
-    expect(tree).toMatchSnapshot();
-  });
-
   it('should use ReactDOM.render if renderMode is "render"', async () => {
     expect.assertions(2);
     const promiseResolveSpy = jest.spyOn(Promise, 'resolve');
-    const { render } = require('react-dom');
+    const { render, hydrate } = require('react-dom');
 
     document.getElementById = jest.fn(() => ({ remove: jest.fn() }));
 
@@ -215,12 +154,12 @@ describe('initClient', () => {
 
     await initClient();
 
-    const tree = shallow(render.mock.calls[0][0]);
-    expect(tree).toMatchSnapshot();
+    expect(render).toHaveBeenCalled();
+    expect(hydrate).not.toHaveBeenCalled();
   });
 
   it('should load pwa script', async () => {
-    expect.assertions(2);
+    expect.assertions(1);
     document.getElementById = jest.fn(() => ({ remove: jest.fn() }));
 
     const { matchPromise } = require('@americanexpress/one-app-router');
@@ -239,7 +178,7 @@ describe('initClient', () => {
   });
 
   it('should remove the server rendered stylesheets', async () => {
-    expect.assertions(2);
+    expect.assertions(1);
     const remove = jest.fn();
     const createStyle = () => {
       const style = document.createElement('style');
@@ -265,7 +204,7 @@ describe('initClient', () => {
   });
 
   it('should move the scripts loaded by react-helmet', async () => {
-    expect.assertions(2);
+    expect.assertions(1);
     const { moveHelmetScripts } = require('../../src/client/prerender');
     const initClient = require('../../src/client/initClient').default;
     await initClient();
@@ -274,7 +213,7 @@ describe('initClient', () => {
   });
 
   it('should set the holocron module map with the value sent from the server', async () => {
-    expect.assertions(3);
+    expect.assertions(2);
     const initClient = require('../../src/client/initClient').default;
     await initClient();
     const { getModuleMap } = require('holocron');
