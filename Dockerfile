@@ -2,7 +2,13 @@
 # which includes build utils preinstalled (e.g. gcc, make, etc).
 # This will result in faster and reliable One App docker image
 # builds as we do not have to run apk installs for alpine.
-FROM node:12 as builder
+FROM ci-repo.aexp.com:8456/rhscl/nodejs-12-rhel7:1-48 as builder
+
+ENV HTTP_PROXY="http://proxy.aexp.com:8080"  \
+HTTPS_PROXY="http://proxy.aexp.com:8080" \
+NO_PROXY=.aexp.com \
+ALL_PROXY="http://proxy.aexp.com:8080"
+
 WORKDIR /opt/build
 RUN npm install -g npm@6.12.1 --registry=https://registry.npmjs.org
 COPY --chown=node:node ./ /opt/build
@@ -10,6 +16,7 @@ COPY --chown=node:node ./ /opt/build
 RUN NODE_ENV=development npm ci --build-from-source
 # npm ci does not run postinstall with root account
 # which is why there is a dev build
+# RUN chmod -R 777 /opt/
 RUN NODE_ENV=development npm run build && \
     mkdir -p /opt/one-app/development && \
     chown node:node /opt/one-app/development && \
@@ -27,27 +34,16 @@ RUN NODE_ENV=production npm run build && \
     mv /opt/build/bundle.integrity.manifest.json /opt/one-app/production && \
     mv /opt/build/.build-meta.json /opt/one-app/production
 
-# development image
-# docker build . --target=development
-FROM node:12-alpine as development
-ARG USER
-ENV USER ${USER:-node}
-ENV NODE_ENV=development
-# exposing these ports as they are default for all the local dev servers
-# see src/server/config/env/runtime.js
-EXPOSE 3000
-EXPOSE 3001
-EXPOSE 3002
-EXPOSE 3005
-WORKDIR /opt/one-app
-RUN chown node:node /opt/one-app
-USER $USER
-CMD ["node", "lib/server"]
-COPY --from=builder --chown=node:node /opt/one-app/development ./
 
 # production image
 # last so that it's the default image artifact
-FROM node:12-alpine as production
+FROM ci-repo.aexp.com:8456/rhscl/nodejs-12-rhel7:1-48 as production
+
+ENV HTTP_PROXY="http://proxy.aexp.com:8080"  \
+HTTPS_PROXY="http://proxy.aexp.com:8080" \
+NO_PROXY=.aexp.com \
+ALL_PROXY="http://proxy.aexp.com:8080"
+
 ARG USER
 ENV USER ${USER:-node}
 ENV NODE_ENV=production
