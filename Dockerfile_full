@@ -5,19 +5,23 @@
 FROM ci-repo.aexp.com:8456/rhscl/nodejs-12-rhel7:1-48 as builder
 USER root
 RUN useradd node
+RUN mkdir -p /opt/build /opt/app-root /opt/one-app
+RUN chown -R node /opt/build /opt/app-root /opt/one-app
+USER node
 ENV HTTP_PROXY="http://proxy.aexp.com:8080"  \
 HTTPS_PROXY="http://proxy.aexp.com:8080" \
 NO_PROXY=.aexp.com \
 ALL_PROXY="http://proxy.aexp.com:8080"
 
 WORKDIR /opt/build
+RUN ls -la /
 RUN npm install -g npm@6.12.1 --registry=https://registry.npmjs.org
 COPY --chown=node:node ./ /opt/build
+RUN ls -la /opt
 # npm ci does not run postinstall with root account
 RUN NODE_ENV=development npm ci --build-from-source
 # npm ci does not run postinstall with root account
 # which is why there is a dev build
-RUN chmod -R 777 /opt/
 RUN NODE_ENV=development npm run build && \
     mkdir -p /opt/one-app/development && \
     chown node:node /opt/one-app/development && \
@@ -39,7 +43,6 @@ RUN    mv /opt/build/.build-meta.json /opt/one-app/production
 # production image
 # last so that it's the default image artifact
 FROM ci-repo.aexp.com:8456/rhscl/nodejs-12-rhel7:1-48 as production
-RUN chmod -R 777 /opt/
 USER root
 RUN useradd node
 
